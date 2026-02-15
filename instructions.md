@@ -18,3 +18,9 @@ This page runs a **Monte Carlo** simulation of your pension pot. It uses your as
 - **Uni costs/year** and **Gift amount** — Applied only to children who have "Goes to uni" or "Gets gift" checked.
 
 All figures are in **today’s pounds** (real terms). This is not financial advice.
+
+## Random notes
+
+- This assumes your returns can be modelled as if you're invested in a global equity tracker.
+- The Expected Real Return is defaulted to a 6% arithmetic mean to result in a realistic 5% compound annual growth rate, as simulations require a higher input figure to mathematically compensate for the 'drag' on returns caused by market volatility
+- The default 16% volatility  aligns with the long-term historical standard deviation of global equities, ensuring the tool accurately simulates the typical year-to-year fluctuations of the stock market.
