@@ -282,7 +282,9 @@
   function loadInstructions() {
     const el = document.getElementById('instructions');
     if (!el) return;
-    fetch('instructions.md')
+    // Cache-bust so updates to instructions.md show after deploy (e.g. GitHub Pages)
+    const url = 'instructions.md?v=' + (window.__buildTimestamp__ || Date.now());
+    fetch(url)
       .then((r) => r.text())
       .then((text) => {
         if (typeof marked !== 'undefined') {
