@@ -2,6 +2,11 @@
   box-sizing: border-box;
 }
 
+html {
+  -webkit-overflow-scrolling: touch;
+  overflow-x: hidden;
+}
+
 body {
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   margin: 0;
@@ -9,6 +14,8 @@ body {
   background: #f8fafc;
   color: #1e293b;
   line-height: 1.5;
+  overflow-x: hidden;
+  min-height: 100vh;
 }
 
 header {
@@ -39,14 +46,31 @@ main {
   padding: 1.5rem;
   display: grid;
   grid-template-columns: 320px 1fr;
+  grid-template-rows: auto auto;
   gap: 2rem;
   align-items: start;
 }
 
+.controls { grid-column: 1; grid-row: 1 / -1; }
+#instructions { grid-column: 2; grid-row: 1; }
+.results { grid-column: 2; grid-row: 2; }
+
 @media (max-width: 900px) {
   main {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    padding: 1rem;
   }
+
+  #instructions { grid-column: 1; grid-row: 1; }
+  .controls { grid-column: 1; grid-row: 2; position: static; }
+  .results { grid-column: 1; grid-row: 3; }
+
+  .chart-wrap {
+    min-height: 280px;
+    height: 280px;
+  }
+
 }
 
 .controls {
@@ -194,6 +218,7 @@ main {
   font-size: 0.9rem;
   line-height: 1.55;
   color: #334155;
+  min-height: 3rem;
 }
 
 .instructions h1 { font-size: 1.25rem; margin: 0 0 0.5rem 0; color: #1e293b; }
@@ -237,10 +262,12 @@ main {
   padding: 1rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   min-height: 320px;
+  height: 360px;
 }
 
 .chart-wrap canvas {
   max-width: 100%;
+  display: block;
 }
 
 footer {
@@ -258,4 +285,39 @@ footer code {
   padding: 0.1em 0.35em;
   border-radius: 4px;
   font-size: 0.9em;
+}
+
+.full-report-wrap {
+  margin-top: 1.5rem;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.full-report-wrap summary {
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  user-select: none;
+}
+
+.full-report-wrap summary:hover {
+  background: #f8fafc;
+}
+
+.full-report {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: #334155;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  overflow-x: auto;
+  white-space: pre;
+  max-height: 70vh;
+  overflow-y: auto;
 }

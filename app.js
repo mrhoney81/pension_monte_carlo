@@ -62,6 +62,7 @@
     const yMax = yMaxRaw === '' || isNaN(Number(yMaxRaw)) ? undefined : Number(yMaxRaw);
 
     if (portfolioChart) portfolioChart.destroy();
+    var isMobile = window.innerWidth <= 900;
     portfolioChart = new Chart(ctx, {
       type: 'line',
       data: {
@@ -127,8 +128,8 @@
       },
       options: {
         responsive: true,
-        maintainAspectRatio: true,
-        aspectRatio: 2,
+        maintainAspectRatio: !isMobile,
+        aspectRatio: isMobile ? 1 : 2,
         interaction: {
           mode: 'index',
           intersect: false,
@@ -177,6 +178,110 @@
     document.getElementById('medianEstate').textContent = formatNum(result.medianEstate);
   }
 
+  function fmt(x) {
+    if (typeof x !== 'number' || isNaN(x)) return '—';
+    if (x >= 1e6) return '£' + (x / 1e6).toFixed(2) + 'M';
+    return '£' + Math.round(x).toLocaleString();
+  }
+  function fmtNum(x) {
+    if (typeof x !== 'number' || isNaN(x)) return '—';
+    return Math.round(x).toLocaleString();
+  }
+
+  function buildReport(result, params) {
+    var p = params;
+    var r = result;
+    var lines = [];
+    lines.push('MONTE CARLO — DYNAMIC RETIREMENT AGE + 4% RULE — TODAY\'S £');
+    lines.push('========================================================================');
+    lines.push('  Starting pot:          ' + fmt(p.startingPot) + '  (age ' + p.currentAge + ')');
+    lines.push('  Annual contribution:   ' + fmt(p.annualContribution));
+    lines.push('  Retirement trigger:    Pot ≥ ' + fmt(p.retirementThreshold));
+    lines.push('  Retirement window:     Age ' + p.earliestRetirement + '–' + p.latestRetirement);
+    lines.push('  Withdrawal:            ' + (p.withdrawalRate * 100) + '% of pot = total income (inc. pensions)');
+    lines.push('  Income floor:          ' + fmt(p.incomeFloor) + '/yr');
+    lines.push('  Income ceiling:        ' + fmt(p.incomeCeiling) + '/yr');
+    lines.push('  State pension:         ' + fmt(p.pension1Amount) + '/yr from age ' + p.pension1Age);
+    lines.push('  Partner pension:       ' + fmt(p.pension2Amount) + '/yr from age ' + p.pension2Age);
+    var uniParts = [];
+    for (var c = 0; c < p.numChildren && c < p.children.length; c++) {
+      if (p.children[c] && p.children[c].goesToUni)
+        uniParts.push('child ' + (c + 1) + ' from age ' + p.children[c].uniStartAge);
+    }
+    lines.push('  Uni fees:              ' + fmt(p.uniFeePerYear) + '/yr × ' + p.uniYears + ' yrs' + (uniParts.length ? ', ' + uniParts.join(', ') : ' (none)'));
+    var giftAges = [];
+    for (var c2 = 0; c2 < p.numChildren && c2 < p.children.length; c2++) {
+      if (p.children[c2] && p.children[c2].getsGift) giftAges.push(p.children[c2].giftAge);
+    }
+    lines.push('  Gifts:                 ' + fmt(p.giftAmount) + ' per child at ages ' + (giftAges.length ? giftAges.join(' & ') : '—'));
+    lines.push('  Gift min pot:          ' + fmt(p.giftMinPot));
+    lines.push('  Real return (arith):   ' + (p.realArithmeticMean * 100).toFixed(1) + '%');
+    lines.push('  Volatility:            ' + (p.volatility * 100).toFixed(1) + '%');
+    lines.push('  Simulations:           ' + fmtNum(r.numRuns));
+    lines.push('========================================================================');
+    lines.push('');
+    lines.push('  RETIREMENT AGE DISTRIBUTION:');
+    for (var a = r.earliestRetirement; a <= r.latestRetirement; a++) {
+      var count = r.retAgeCounts[a] || 0;
+      var pct = (count / r.numRuns * 100).toFixed(1);
+      var bar = '█'.repeat(Math.floor(pct / 2));
+      lines.push('    Age ' + a + ': ' + fmtNum(count).padStart(5) + ' runs (' + pct.padStart(5) + '%)  ' + bar);
+    }
+    lines.push('    Median retirement age: ' + Math.round(r.medianRetAge));
+    lines.push('    Mean retirement age:   ' + r.meanRetAge.toFixed(1));
+    lines.push('');
+    lines.push('  POT AT RETIREMENT:');
+    lines.push('    5th percentile:   ' + fmt(r.potAtRetirementP5));
+    lines.push('    25th percentile:  ' + fmt(r.potAtRetirementP25));
+    lines.push('    Median:           ' + fmt(r.medianPotAtRet));
+    lines.push('    75th percentile:  ' + fmt(r.potAtRetirementP75));
+    lines.push('    95th percentile:  ' + fmt(r.potAtRetirementP95));
+    lines.push('');
+    lines.push('  GIFTS TO CHILDREN (' + fmt(p.giftAmount) + ' each, min pot ' + fmt(p.giftMinPot) + '):');
+    lines.push('     All gifts made:        ' + fmtNum(r.giftAllCount) + ' runs (' + (r.giftAllCount / r.numRuns * 100).toFixed(1) + '%)');
+    lines.push('     Some gifts made:       ' + fmtNum(r.giftSomeCount) + ' runs (' + (r.giftSomeCount / r.numRuns * 100).toFixed(1) + '%)');
+    lines.push('     No gifts made:         ' + fmtNum(r.giftNoneCount) + ' runs (' + (r.giftNoneCount / r.numRuns * 100).toFixed(1) + '%)');
+    lines.push('');
+    var reportAges = [57, 60, 63, 65, 68, 70, 72, 75, 80, 85, 90].filter(function(age) { return age >= r.startAge && age <= 90; });
+    lines.push(' Age  Pensions     ------- Total Income -------      ------ Portfolio Value ------');
+    lines.push('                      5th    25th   Median    95th       5th      25th   Median    95th');
+    lines.push('-'.repeat(95));
+    for (var i = 0; i < reportAges.length; i++) {
+      var age = reportAges[i];
+      var idx = age - r.startAge;
+      var pens = (age >= p.pension1Age ? p.pension1Amount : 0) + (age >= p.pension2Age ? p.pension2Amount : 0);
+      var inc = r.incomeStats[age];
+      if (!inc) inc = { p5: 0, p25: 0, median: 0, p95: 0 };
+      var retiredPct = 0;
+      for (var rr = 0; rr < r.numRuns; rr++) if (r.retirementAges[rr] <= age) retiredPct++;
+      retiredPct = (retiredPct / r.numRuns * 100).toFixed(0);
+      var note = reportAges.length > 5 && age < p.latestRetirement ? '  (' + retiredPct + '% retired)' : '';
+      lines.push(
+        '  ' + String(age).padStart(2) + '  ' + fmt(pens).padStart(8) +
+        '  ' + fmt(inc.p5).padStart(8) + ' ' + fmt(inc.p25).padStart(8) + ' ' + fmt(inc.median).padStart(8) + ' ' + fmt(inc.p95).padStart(8) +
+        '  ' + fmt(r.p5[idx]).padStart(8) + ' ' + fmt(r.p25[idx]).padStart(8) + ' ' + fmt(r.median[idx]).padStart(8) + ' ' + fmt(r.p95[idx]).padStart(8) + note
+      );
+    }
+    lines.push('');
+    lines.push('  💰 Probability money lasts to 90:  ' + r.survivalPct.toFixed(1) + '%');
+    lines.push('  ⚠️  Runs where money ran out:       ' + fmtNum(r.ruinCount) + ' / ' + fmtNum(r.numRuns) + ' (' + (r.ruinCount / r.numRuns * 100).toFixed(1) + '%)');
+    if (r.ruinCount > 0) {
+      lines.push('     Median ruin age (when it happens): ' + Math.round(r.medianRuinAge));
+      lines.push('     Earliest ruin age:                 ' + Math.round(r.earliestRuinAge));
+      lines.push('     After pot depleted, income = pensions only (up to ' + fmt(p.pension1Amount + p.pension2Amount) + '/yr)');
+    }
+    lines.push('');
+    lines.push('  🏠 ESTATE AT DEATH (age 90):');
+    lines.push('     5th percentile:   ' + fmt(r.estateP5));
+    lines.push('     10th percentile:  ' + fmt(r.estateP10));
+    lines.push('     25th percentile:  ' + fmt(r.estateP25));
+    lines.push('     Median:           ' + fmt(r.medianEstate));
+    lines.push('     75th percentile:  ' + fmt(r.estateP75));
+    lines.push('     95th percentile:  ' + fmt(r.estateP95));
+    lines.push('     Mean:             ' + fmt(r.estateMean));
+    return lines.join('\n');
+  }
+
   function runAndUpdate() {
     const loading = document.getElementById('loading');
     const stats = document.getElementById('stats');
@@ -187,6 +292,11 @@
       const result = window.runSimulation(params);
       updateStats(result);
       updateChart(result, params);
+      var reportEl = document.getElementById('fullReport');
+      if (reportEl) reportEl.textContent = buildReport(result, params);
+      setTimeout(function () {
+        if (portfolioChart) portfolioChart.resize();
+      }, 150);
       loading.hidden = true;
       stats.style.opacity = '1';
     }, 10);
@@ -282,21 +392,35 @@
   function loadInstructions() {
     const el = document.getElementById('instructions');
     if (!el) return;
-    // Cache-bust so updates to instructions.md show after deploy (e.g. GitHub Pages)
-    const url = 'instructions.md?v=' + (window.__buildTimestamp__ || Date.now());
+    el.innerHTML = '<p style="color:#64748b">Loading…</p>';
+    var baseEl = document.querySelector('base');
+    var base = (baseEl && baseEl.href) || window.location.href;
+    if (!base.endsWith('/') && !base.endsWith('.html')) base += '/';
+    if (base.endsWith('.html')) base = base.replace(/\/[^/]*$/, '/');
+    var url = base + 'instructions.md?v=' + (window.__buildTimestamp__ || Date.now());
     fetch(url)
-      .then((r) => r.text())
-      .then((text) => {
+      .then(function (r) {
+        if (!r.ok) throw new Error(r.statusText);
+        return r.text();
+      })
+      .then(function (text) {
         if (typeof marked !== 'undefined') {
           el.innerHTML = marked.parse(text);
         } else {
           el.textContent = text;
         }
       })
-      .catch(() => {
-        el.textContent = 'Instructions could not be loaded. Add instructions.md to this folder when serving the page (e.g. via GitHub Pages or a local server).';
+      .catch(function () {
+        var fromFile = window.location.protocol === 'file:';
+        el.innerHTML = fromFile
+          ? '<p>Instructions are loaded when you view this page from the web (e.g. GitHub Pages). Opening the file directly from your computer does not load <code>instructions.md</code>.</p>'
+          : '<p>Instructions could not be loaded. Add <code>instructions.md</code> when serving the page (e.g. GitHub Pages or a local server).</p>';
       });
   }
+
+  window.addEventListener('resize', function () {
+    if (portfolioChart && window.innerWidth <= 900) portfolioChart.resize();
+  });
 
   bindSliders();
   setupRunButton();
