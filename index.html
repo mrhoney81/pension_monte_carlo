@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pension Monte Carlo</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="simulation.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Pension Monte Carlo</h1>
+    <p class="tagline">Retire when pot hits threshold (age 57–63). 4% rule, income floor/ceiling, uni fees &amp; gifts. Today’s £. This is not financial advice.</p>
+  </header>
+
+  <main>
+    <aside class="controls">
+      <h2>Assumptions</h2>
+      <button type="button" id="runBtn">Run simulation</button>
+      <div class="control-group">
+        <label for="currentAgeNum">Current age</label>
+        <div class="slider-row">
+          <input type="range" id="currentAge" min="25" max="60" step="1" value="50" />
+          <input type="number" id="currentAgeNum" min="25" max="60" step="1" value="50" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="startingPotNum">Starting pot (£)</label>
+        <div class="slider-row">
+          <input type="range" id="startingPot" min="0" max="2000000" step="50000" value="500000" />
+          <input type="number" id="startingPotNum" min="0" max="2000000" step="50000" value="500000" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="annualContributionNum">Annual contribution (£)</label>
+        <div class="slider-row">
+          <input type="range" id="annualContribution" min="0" max="80000" step="2000" value="20000" />
+          <input type="number" id="annualContributionNum" min="0" max="80000" step="2000" value="20000" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="retirementThresholdNum">Retirement threshold (£)</label>
+        <div class="slider-row">
+          <input type="range" id="retirementThreshold" min="100000" max="2000000" step="50000" value="1000000" />
+          <input type="number" id="retirementThresholdNum" min="100000" max="2000000" step="50000" value="1000000" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="earliestRetirementNum">Earliest retirement age</label>
+        <div class="slider-row">
+          <input type="range" id="earliestRetirement" min="55" max="62" step="1" value="57" />
+          <input type="number" id="earliestRetirementNum" min="55" max="62" step="1" value="57" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="latestRetirementNum">Latest retirement age</label>
+        <div class="slider-row">
+          <input type="range" id="latestRetirement" min="60" max="68" step="1" value="63" />
+          <input type="number" id="latestRetirementNum" min="60" max="68" step="1" value="63" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="incomeFloorNum">Income floor (£/yr)</label>
+        <div class="slider-row">
+          <input type="range" id="incomeFloor" min="20000" max="80000" step="2000" value="50000" />
+          <input type="number" id="incomeFloorNum" min="20000" max="80000" step="2000" value="50000" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="incomeCeilingNum">Income ceiling (£/yr)</label>
+        <div class="slider-row">
+          <input type="range" id="incomeCeiling" min="40000" max="120000" step="2000" value="80000" />
+          <input type="number" id="incomeCeilingNum" min="40000" max="120000" step="2000" value="80000" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="withdrawalRateNum">Withdrawal rate (% of pot in that year)</label>
+        <div class="slider-row">
+          <input type="range" id="withdrawalRate" min="2" max="6" step="0.25" value="4" />
+          <input type="number" id="withdrawalRateNum" min="2" max="6" step="0.25" value="4" />
+        </div>
+      </div>
+
+      <h3 class="control-section">Pensions</h3>
+      <div class="control-group">
+        <label for="pension1AgeNum">State pension age</label>
+        <div class="slider-row">
+          <input type="range" id="pension1Age" min="66" max="70" step="1" value="68" />
+          <input type="number" id="pension1AgeNum" min="66" max="70" step="1" value="68" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="pension1AmountNum">State pension (£/yr)</label>
+        <div class="slider-row">
+          <input type="range" id="pension1Amount" min="0" max="15000" step="500" value="12000" />
+          <input type="number" id="pension1AmountNum" min="0" max="15000" step="500" value="12000" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="pension2AgeNum">Your age when partner's pension starts</label>
+        <div class="slider-row">
+          <input type="range" id="pension2Age" min="66" max="75" step="1" value="72" />
+          <input type="number" id="pension2AgeNum" min="66" max="75" step="1" value="72" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="pension2AmountNum">Partner pension (£/yr)</label>
+        <div class="slider-row">
+          <input type="range" id="pension2Amount" min="0" max="40000" step="1000" value="25000" />
+          <input type="number" id="pension2AmountNum" min="0" max="40000" step="1000" value="25000" />
+        </div>
+      </div>
+
+      <h3 class="control-section">Children (0–4)</h3>
+      <div class="control-group">
+        <label for="numChildrenNum">Number of children</label>
+        <div class="slider-row">
+          <input type="range" id="numChildren" min="0" max="4" step="1" value="2" />
+          <input type="number" id="numChildrenNum" min="0" max="4" step="1" value="2" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="uniFeePerYearNum">Uni costs/year (£ per child)</label>
+        <div class="slider-row">
+          <input type="range" id="uniFeePerYear" min="0" max="15000" step="500" value="9000" />
+          <input type="number" id="uniFeePerYearNum" min="0" max="15000" step="500" value="9000" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="uniYearsNum">Uni years (per child)</label>
+        <div class="slider-row">
+          <input type="range" id="uniYears" min="3" max="5" step="1" value="4" />
+          <input type="number" id="uniYearsNum" min="3" max="5" step="1" value="4" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="giftAmountNum">Gift amount (£ per child)</label>
+        <div class="slider-row">
+          <input type="range" id="giftAmount" min="0" max="500000" step="10000" value="300000" />
+          <input type="number" id="giftAmountNum" min="0" max="500000" step="10000" value="300000" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="giftMinPotNum">Min pot to gift (£)</label>
+        <div class="slider-row">
+          <input type="range" id="giftMinPot" min="0" max="1500000" step="50000" value="750000" />
+          <input type="number" id="giftMinPotNum" min="0" max="1500000" step="50000" value="750000" />
+        </div>
+      </div>
+
+      <div id="childBlock1" class="child-block">
+        <h4 class="child-heading">Child 1</h4>
+        <div class="control-group">
+          <label class="checkbox-label"><input type="checkbox" id="child1Uni" checked /> Goes to uni</label>
+          <label for="child1UniAgeNum" class="sub-label">Your age when they turn 18</label>
+          <div class="slider-row">
+            <input type="range" id="child1UniAge" min="50" max="65" step="1" value="58" />
+            <input type="number" id="child1UniAgeNum" min="50" max="65" step="1" value="58" />
+          </div>
+        </div>
+        <div class="control-group">
+          <label class="checkbox-label"><input type="checkbox" id="child1Gift" checked /> Gets gift</label>
+          <label for="child1GiftAgeNum" class="sub-label">Your age when you give gift</label>
+          <div class="slider-row">
+            <input type="range" id="child1GiftAge" min="65" max="80" step="1" value="70" />
+            <input type="number" id="child1GiftAgeNum" min="65" max="80" step="1" value="70" />
+          </div>
+        </div>
+      </div>
+      <div id="childBlock2" class="child-block">
+        <h4 class="child-heading">Child 2</h4>
+        <div class="control-group">
+          <label class="checkbox-label"><input type="checkbox" id="child2Uni" checked /> Goes to uni</label>
+          <label for="child2UniAgeNum" class="sub-label">Your age when they turn 18</label>
+          <div class="slider-row">
+            <input type="range" id="child2UniAge" min="50" max="65" step="1" value="60" />
+            <input type="number" id="child2UniAgeNum" min="50" max="65" step="1" value="60" />
+          </div>
+        </div>
+        <div class="control-group">
+          <label class="checkbox-label"><input type="checkbox" id="child2Gift" checked /> Gets gift</label>
+          <label for="child2GiftAgeNum" class="sub-label">Your age when you give gift</label>
+          <div class="slider-row">
+            <input type="range" id="child2GiftAge" min="65" max="80" step="1" value="72" />
+            <input type="number" id="child2GiftAgeNum" min="65" max="80" step="1" value="72" />
+          </div>
+        </div>
+      </div>
+      <div id="childBlock3" class="child-block">
+        <h4 class="child-heading">Child 3</h4>
+        <div class="control-group">
+          <label class="checkbox-label"><input type="checkbox" id="child3Uni" /> Goes to uni</label>
+          <label for="child3UniAgeNum" class="sub-label">Your age when they turn 18</label>
+          <div class="slider-row">
+            <input type="range" id="child3UniAge" min="50" max="65" step="1" value="62" />
+            <input type="number" id="child3UniAgeNum" min="50" max="65" step="1" value="62" />
+          </div>
+        </div>
+        <div class="control-group">
+          <label class="checkbox-label"><input type="checkbox" id="child3Gift" /> Gets gift</label>
+          <label for="child3GiftAgeNum" class="sub-label">Your age when you give gift</label>
+          <div class="slider-row">
+            <input type="range" id="child3GiftAge" min="65" max="80" step="1" value="74" />
+            <input type="number" id="child3GiftAgeNum" min="65" max="80" step="1" value="74" />
+          </div>
+        </div>
+      </div>
+      <div id="childBlock4" class="child-block">
+        <h4 class="child-heading">Child 4</h4>
+        <div class="control-group">
+          <label class="checkbox-label"><input type="checkbox" id="child4Uni" /> Goes to uni</label>
+          <label for="child4UniAgeNum" class="sub-label">Your age when they turn 18</label>
+          <div class="slider-row">
+            <input type="range" id="child4UniAge" min="50" max="65" step="1" value="64" />
+            <input type="number" id="child4UniAgeNum" min="50" max="65" step="1" value="64" />
+          </div>
+        </div>
+        <div class="control-group">
+          <label class="checkbox-label"><input type="checkbox" id="child4Gift" /> Gets gift</label>
+          <label for="child4GiftAgeNum" class="sub-label">Your age when you give gift</label>
+          <div class="slider-row">
+            <input type="range" id="child4GiftAge" min="65" max="80" step="1" value="76" />
+            <input type="number" id="child4GiftAgeNum" min="65" max="80" step="1" value="76" />
+          </div>
+        </div>
+      </div>
+
+      <h3 class="control-section">Simulation</h3>
+      <div class="control-group">
+        <label for="realReturnNum">Expected real return (arithmetic mean %)</label>
+        <div class="slider-row">
+          <input type="range" id="realReturn" min="2" max="10" step="0.5" value="6" />
+          <input type="number" id="realReturnNum" min="2" max="10" step="0.5" value="6" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="volatilityNum">Volatility (%)</label>
+        <div class="slider-row">
+          <input type="range" id="volatility" min="8" max="25" step="1" value="16" />
+          <input type="number" id="volatilityNum" min="8" max="25" step="1" value="16" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="numRunsNum">Simulation runs</label>
+        <div class="slider-row">
+          <input type="range" id="numRuns" min="500" max="5000" step="500" value="3000" />
+          <input type="number" id="numRunsNum" min="500" max="5000" step="500" value="3000" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="chartYMax">Chart Y-axis max (£M)</label>
+        <input type="number" id="chartYMax" class="chart-y-max" min="0" step="0.5" placeholder="auto" title="Leave empty for auto scale" />
+      </div>
+      <div class="control-group">
+        <label><input type="checkbox" id="lockSeed" checked /> Lock seed (reproducible)</label>
+      </div>
+    </aside>
+
+    <section class="results">
+      <div id="loading" class="loading" hidden>Running simulation…</div>
+      <div id="instructions" class="instructions"></div>
+      <div id="stats" class="stats">
+        <p><strong>Money lasts to 90:</strong> <span id="survivalPct">—</span>%</p>
+        <p><strong>Ruin:</strong> <span id="ruinCount">—</span> runs</p>
+        <p><strong>Median retirement age:</strong> <span id="medianRetAge">—</span></p>
+        <p><strong>Median pot at retirement:</strong> £<span id="medianPotRet">—</span> <span class="stat-note">(median of each run’s pot at the end of the year they retired)</span></p>
+        <p><strong>Median estate at 90:</strong> £<span id="medianEstate">—</span></p>
+        <p class="stat-note">Chart at a given age shows median pot across all runs at that age (so includes runs who retired earlier and have already drawn down).</p>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="portfolioChart" aria-label="Portfolio value by age"></canvas>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Same logic as <code>monte_carlo_threshold.py</code>. Uni fees, two gifts, state &amp; partner pensions. Not advice.</p>
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
