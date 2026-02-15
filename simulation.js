@@ -167,11 +167,67 @@ function runSimulation(params) {
   }
   potsAtRetirement.sort((a, b) => a - b);
   const medianPotAtRet = percentile(potsAtRetirement, 50);
+  const potAtRetirementP5 = percentile(potsAtRetirement, 5);
+  const potAtRetirementP25 = percentile(potsAtRetirement, 25);
+  const potAtRetirementP75 = percentile(potsAtRetirement, 75);
+  const potAtRetirementP95 = percentile(potsAtRetirement, 95);
+
+  const expectedGifts = children.filter((c, i) => i < numChildren && c && c.getsGift).length;
+  let giftAllCount = 0, giftNoneCount = 0;
+  for (let r = 0; r < numRuns; r++) {
+    let made = 0;
+    for (let c = 0; c < numChildren && c < 4; c++) if (giftMade[r][c]) made++;
+    if (made === expectedGifts) giftAllCount++;
+    else if (made === 0) giftNoneCount++;
+  }
+  const giftSomeCount = numRuns - giftAllCount - giftNoneCount;
+
+  const REPORT_AGES = [57, 60, 63, 65, 68, 70, 72, 75, 80, 85, 90];
+  const incomeStats = {};
+  for (const age of REPORT_AGES) {
+    if (age < startAge || age > SIM_END_AGE) continue;
+    const idx = age - startAge;
+    const incomes = [];
+    for (let r = 0; r < numRuns; r++) {
+      if (retirementAges[r] <= age) incomes.push(allTotalIncome[r][idx]);
+    }
+    if (incomes.length === 0) {
+      incomeStats[age] = { p5: 0, p25: 0, median: 0, p75: 0, p95: 0 };
+    } else {
+      incomes.sort((a, b) => a - b);
+      incomeStats[age] = {
+        p5: percentile(incomes, 5),
+        p25: percentile(incomes, 25),
+        median: percentile(incomes, 50),
+        p75: percentile(incomes, 75),
+        p95: percentile(incomes, 95),
+      };
+    }
+  }
+
   const estate = [];
   const finalIdx = SIM_END_AGE - startAge;
   for (let r = 0; r < numRuns; r++) estate.push(allPaths[r][finalIdx]);
   estate.sort((a, b) => a - b);
   const medianEstate = percentile(estate, 50);
+  const estateP5 = percentile(estate, 5);
+  const estateP10 = percentile(estate, 10);
+  const estateP25 = percentile(estate, 25);
+  const estateP75 = percentile(estate, 75);
+  const estateP95 = percentile(estate, 95);
+  let estateMean = 0;
+  for (let r = 0; r < numRuns; r++) estateMean += estate[r];
+  estateMean /= numRuns;
+
+  const ruined = [];
+  for (let r = 0; r < numRuns; r++) if (!Number.isNaN(ruinAges[r])) ruined.push(ruinAges[r]);
+  const medianRuinAge = ruined.length ? percentile(ruined.sort((a, b) => a - b), 50) : null;
+  const earliestRuinAge = ruined.length ? Math.min.apply(null, ruined) : null;
+
+  const retAgeCounts = {};
+  for (let a = earliestRetirement; a <= latestRetirement; a++) retAgeCounts[a] = 0;
+  for (let r = 0; r < numRuns; r++) retAgeCounts[retirementAges[r]]++;
+  const meanRetAge = Array.from(retirementAges).reduce((s, a) => s + a, 0) / numRuns;
 
   return {
     startAge,
@@ -187,8 +243,29 @@ function runSimulation(params) {
     ruinAges,
     numRuns,
     medianRetAge,
+    meanRetAge,
     medianPotAtRet,
+    potAtRetirementP5,
+    potAtRetirementP25,
+    potAtRetirementP75,
+    potAtRetirementP95,
+    giftAllCount,
+    giftSomeCount,
+    giftNoneCount,
+    expectedGifts,
+    incomeStats,
     medianEstate,
+    estateP5,
+    estateP10,
+    estateP25,
+    estateP75,
+    estateP95,
+    estateMean,
+    medianRuinAge,
+    earliestRuinAge,
+    retAgeCounts,
+    earliestRetirement,
+    latestRetirement,
     survivalPct: 100 - (ruinCount / numRuns) * 100,
   };
 }

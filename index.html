@@ -15,6 +15,7 @@
   </header>
 
   <main>
+    <div id="instructions" class="instructions"></div>
     <aside class="controls">
       <h2>Assumptions</h2>
       <button type="button" id="runBtn">Run simulation</button>
@@ -259,7 +260,6 @@
 
     <section class="results">
       <div id="loading" class="loading" hidden>Running simulation…</div>
-      <div id="instructions" class="instructions"></div>
       <div id="stats" class="stats">
         <p><strong>Money lasts to 90:</strong> <span id="survivalPct">—</span>%</p>
         <p><strong>Ruin:</strong> <span id="ruinCount">—</span> runs</p>
@@ -271,6 +271,10 @@
       <div class="chart-wrap">
         <canvas id="portfolioChart" aria-label="Portfolio value by age"></canvas>
       </div>
+      <details class="full-report-wrap">
+        <summary>Full text report</summary>
+        <pre id="fullReport" class="full-report"></pre>
+      </details>
     </section>
   </main>
 
