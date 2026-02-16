@@ -40,37 +40,42 @@ header h1 {
   margin-right: auto;
 }
 
-main {
+/* Layout: desktop = controls left, instructions + results right. Mobile = instructions, controls, results. */
+.main-grid {
   max-width: 1200px;
   margin: 0 auto;
   padding: 1.5rem;
   display: grid;
   grid-template-columns: 320px 1fr;
   grid-template-rows: auto auto;
+  grid-template-areas:
+    "controls instructions"
+    "controls results";
   gap: 2rem;
   align-items: start;
 }
 
-.controls { grid-column: 1; grid-row: 1 / -1; }
-#instructions { grid-column: 2; grid-row: 1; }
-.results { grid-column: 2; grid-row: 2; }
+.main-grid .controls { grid-area: controls; }
+.main-grid #instructions { grid-area: instructions; }
+.main-grid .results { grid-area: results; }
 
 @media (max-width: 900px) {
-  main {
+  .main-grid {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto auto;
+    grid-template-areas:
+      "instructions"
+      "controls"
+      "results";
     padding: 1rem;
   }
 
-  #instructions { grid-column: 1; grid-row: 1; }
-  .controls { grid-column: 1; grid-row: 2; position: static; }
-  .results { grid-column: 1; grid-row: 3; }
+  .main-grid .controls { position: static; }
 
   .chart-wrap {
     min-height: 280px;
     height: 280px;
   }
-
 }
 
 .controls {
@@ -111,6 +116,59 @@ main {
   font-size: 0.85rem;
   color: #475569;
   margin-bottom: 0.35rem;
+}
+
+.label-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.label-row label {
+  margin-bottom: 0;
+  flex: 0 1 auto;
+}
+
+.help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  background: #e2e8f0;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.help-icon:hover,
+.help-icon:focus {
+  color: #2563eb;
+  background: #c7d2fe;
+}
+
+.help-popover {
+  position: fixed;
+  z-index: 1000;
+  max-width: min(280px, calc(100vw - 24px));
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: #334155;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.help-popover[hidden] {
+  display: none !important;
 }
 
 .slider-row {
@@ -179,6 +237,63 @@ main {
   font-size: 0.8rem;
   color: #64748b;
   margin-bottom: 0.25rem;
+}
+
+.control-hint {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin: -0.25rem 0 0.5rem 0;
+}
+
+.db-pensions-list {
+  margin-bottom: 0.5rem;
+}
+
+.db-pension-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.db-pension-row .control-group {
+  margin-bottom: 0;
+}
+
+.db-remove-btn {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  color: #64748b;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  align-self: center;
+}
+
+.db-remove-btn:hover {
+  color: #dc2626;
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.add-db-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.add-db-btn:hover {
+  background: #dbeafe;
 }
 
 #runBtn {

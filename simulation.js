@@ -32,6 +32,10 @@ function getPensions(age, params) {
   let p = 0;
   if (age >= params.pension1Age) p += params.pension1Amount;
   if (age >= params.pension2Age) p += params.pension2Amount;
+  const db = params.dbPensions || [];
+  for (let i = 0; i < db.length; i++) {
+    if (age >= db[i].age) p += db[i].amount;
+  }
   return p;
 }
 
@@ -54,6 +58,7 @@ function runSimulation(params) {
     pension1Amount,
     pension2Age,
     pension2Amount,
+    dbPensions,
     numChildren,
     children,
     uniFeePerYear,
@@ -96,7 +101,9 @@ function runSimulation(params) {
 
       if (!retired) {
         if (age >= earliestRetirement) {
-          if (newVal >= retirementThreshold || age >= latestRetirement) {
+          const pensionsNow = getPensions(age, params);
+          const canRetireOnPensions = pensionsNow >= incomeFloor;
+          if (newVal >= retirementThreshold || age >= latestRetirement || canRetireOnPensions) {
             retired = true;
             retirementAges[run] = age;
           }
@@ -113,7 +120,10 @@ function runSimulation(params) {
         let wdFromPot = Math.max(targetIncome - pensions, 0);
         wdFromPot = Math.min(wdFromPot, newVal);
         newVal -= wdFromPot;
-        allTotalIncome[run][i] = wdFromPot + pensions;
+        const totalIncomeReceived = wdFromPot + pensions;
+        const surplus = Math.max(0, totalIncomeReceived - targetIncome);
+        newVal += surplus;
+        allTotalIncome[run][i] = Math.min(totalIncomeReceived, targetIncome);
 
         for (let c = 0; c < numChildren && c < 4; c++) {
           const child = children[c];

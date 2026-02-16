@@ -22,6 +22,7 @@ function defaultParams(overrides = {}) {
     pension1Amount: 12000,
     pension2Age: 72,
     pension2Amount: 25000,
+    dbPensions: [],
     numChildren: 2,
     children: [
       { goesToUni: true, uniStartAge: 58, getsGift: true, giftAge: 70 },
@@ -116,6 +117,28 @@ console.log('7. Consistency check...');
 assert(rNew.median.length === rNew.ages.length, 'median array length should match ages');
 assert(rNew.ages[0] === rNew.startAge && rNew.ages[rNew.ages.length - 1] === 90, 'ages range');
 console.log('   OK — structure consistent.\n');
+
+// 8. Defined benefit pensions: 5 x £100k from 65 should make a huge difference (100% survival, much higher estate)
+console.log('8. Defined benefit pensions change results...');
+const baseForDb = defaultParams({ numRuns: 1000, seed: 42 });
+const withDb = defaultParams({
+  numRuns: 1000,
+  seed: 42,
+  dbPensions: [
+    { age: 65, amount: 100000 },
+    { age: 65, amount: 100000 },
+    { age: 65, amount: 100000 },
+    { age: 65, amount: 100000 },
+    { age: 65, amount: 100000 },
+  ],
+});
+const rBase = runSimulation(baseForDb);
+const rDb = runSimulation(withDb);
+assert(rDb.survivalPct === 100, `With 5×£100k DB from 65 expected 100% survival, got ${rDb.survivalPct}%`);
+assert(rDb.medianEstate > rBase.medianEstate * 1.5, `With DB, median estate should be much higher: ${rDb.medianEstate} vs ${rBase.medianEstate}`);
+console.log(`   Without DB: survival ${rBase.survivalPct}%, median estate £${Math.round(rBase.medianEstate).toLocaleString()}`);
+console.log(`   With 5×£100k DB from 65: survival ${rDb.survivalPct}%, median estate £${Math.round(rDb.medianEstate).toLocaleString()}`);
+console.log('   OK — DB pensions are applied and change outcomes.\n');
 
 console.log('All tests passed. Simulation is running the full Monte Carlo.');
 console.log(`  Sample (seed 42, 2000 runs): survival ${r1.survivalPct.toFixed(1)}%, median ret age ${Math.round(r1.medianRetAge)}, median estate £${Math.round(r1.medianEstate).toLocaleString()}.`);

@@ -26,6 +26,21 @@
       pension1Amount: getNum('pension1AmountNum'),
       pension2Age: getNum('pension2AgeNum') || 72,
       pension2Amount: getNum('pension2AmountNum'),
+      dbPensions: (function () {
+        const rows = document.querySelectorAll('.db-pension-row');
+        const arr = [];
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i];
+          const ageEl = r.querySelector('.db-age-num');
+          const amountEl = r.querySelector('.db-amount-num');
+          if (ageEl && amountEl) {
+            const age = Number(ageEl.value) || 65;
+            const amount = Number(amountEl.value) || 0;
+            arr.push({ age: age, amount: amount });
+          }
+        }
+        return arr;
+      })(),
       numChildren: Math.min(4, Math.max(0, getNum('numChildrenNum') || 0)),
       children: (function () {
         const n = Math.min(4, Math.max(0, getNum('numChildrenNum') || 0));
@@ -169,13 +184,29 @@
     });
   }
 
-  function updateStats(result) {
+  function updateStats(result, params) {
     document.getElementById('survivalPct').textContent = result.survivalPct.toFixed(1);
     document.getElementById('ruinCount').textContent =
       result.ruinCount.toLocaleString() + ' / ' + result.numRuns.toLocaleString();
     document.getElementById('medianRetAge').textContent = Math.round(result.medianRetAge);
     document.getElementById('medianPotRet').textContent = formatNum(result.medianPotAtRet);
     document.getElementById('medianEstate').textContent = formatNum(result.medianEstate);
+    var dbSumEl = document.getElementById('dbPensionsSummary');
+    if (dbSumEl) {
+      var db = (params && params.dbPensions) ? params.dbPensions : [];
+      if (db.length > 0) {
+        var total = 0;
+        var minAge = 999;
+        for (var d = 0; d < db.length; d++) {
+          total += (db[d].amount || 0);
+          if ((db[d].age || 0) < minAge) minAge = db[d].age;
+        }
+        dbSumEl.textContent = 'DB pensions in this run: ' + db.length + ' (total £' + Math.round(total).toLocaleString() + '/yr from age ' + minAge + ')';
+        dbSumEl.style.display = '';
+      } else {
+        dbSumEl.style.display = 'none';
+      }
+    }
   }
 
   function fmt(x) {
@@ -191,18 +222,28 @@
   function buildReport(result, params) {
     var p = params;
     var r = result;
+    if (!r || !r.retirementAges || !r.ages) return 'Run simulation to generate the full report.';
     var lines = [];
+    var ear = r.earliestRetirement != null ? r.earliestRetirement : 57;
+    var lat = r.latestRetirement != null ? r.latestRetirement : 63;
+    var retCounts = r.retAgeCounts || {};
+    var incStats = r.incomeStats || {};
     lines.push('MONTE CARLO — DYNAMIC RETIREMENT AGE + 4% RULE — TODAY\'S £');
     lines.push('========================================================================');
     lines.push('  Starting pot:          ' + fmt(p.startingPot) + '  (age ' + p.currentAge + ')');
     lines.push('  Annual contribution:   ' + fmt(p.annualContribution));
     lines.push('  Retirement trigger:    Pot ≥ ' + fmt(p.retirementThreshold));
     lines.push('  Retirement window:     Age ' + p.earliestRetirement + '–' + p.latestRetirement);
-    lines.push('  Withdrawal:            ' + (p.withdrawalRate * 100) + '% of pot = total income (inc. pensions)');
+    lines.push('  Withdrawal:            ' + (p.withdrawalRate * 100) + '% of pot = target income (inc. pensions); surplus pension added to pot');
     lines.push('  Income floor:          ' + fmt(p.incomeFloor) + '/yr');
     lines.push('  Income ceiling:        ' + fmt(p.incomeCeiling) + '/yr');
+    lines.push('  Retirement:            when pot ≥ threshold, or age = latest, or pension income ≥ floor');
     lines.push('  State pension:         ' + fmt(p.pension1Amount) + '/yr from age ' + p.pension1Age);
     lines.push('  Partner pension:       ' + fmt(p.pension2Amount) + '/yr from age ' + p.pension2Age);
+    var db = p.dbPensions || [];
+    for (var d = 0; d < db.length; d++) {
+      lines.push('  DB pension ' + (d + 1) + ':            ' + fmt(db[d].amount) + '/yr from age ' + db[d].age);
+    }
     var uniParts = [];
     for (var c = 0; c < p.numChildren && c < p.children.length; c++) {
       if (p.children[c] && p.children[c].goesToUni)
@@ -221,14 +262,14 @@
     lines.push('========================================================================');
     lines.push('');
     lines.push('  RETIREMENT AGE DISTRIBUTION:');
-    for (var a = r.earliestRetirement; a <= r.latestRetirement; a++) {
-      var count = r.retAgeCounts[a] || 0;
+    for (var a = ear; a <= lat; a++) {
+      var count = retCounts[a] || 0;
       var pct = (count / r.numRuns * 100).toFixed(1);
       var bar = '█'.repeat(Math.floor(pct / 2));
       lines.push('    Age ' + a + ': ' + fmtNum(count).padStart(5) + ' runs (' + pct.padStart(5) + '%)  ' + bar);
     }
     lines.push('    Median retirement age: ' + Math.round(r.medianRetAge));
-    lines.push('    Mean retirement age:   ' + r.meanRetAge.toFixed(1));
+    lines.push('    Mean retirement age:   ' + (r.meanRetAge != null ? r.meanRetAge.toFixed(1) : '—'));
     lines.push('');
     lines.push('  POT AT RETIREMENT:');
     lines.push('    5th percentile:   ' + fmt(r.potAtRetirementP5));
@@ -237,20 +278,31 @@
     lines.push('    75th percentile:  ' + fmt(r.potAtRetirementP75));
     lines.push('    95th percentile:  ' + fmt(r.potAtRetirementP95));
     lines.push('');
+    var gAll = r.giftAllCount != null ? r.giftAllCount : 0;
+    var gSome = r.giftSomeCount != null ? r.giftSomeCount : 0;
+    var gNone = r.giftNoneCount != null ? r.giftNoneCount : r.numRuns;
     lines.push('  GIFTS TO CHILDREN (' + fmt(p.giftAmount) + ' each, min pot ' + fmt(p.giftMinPot) + '):');
-    lines.push('     All gifts made:        ' + fmtNum(r.giftAllCount) + ' runs (' + (r.giftAllCount / r.numRuns * 100).toFixed(1) + '%)');
-    lines.push('     Some gifts made:       ' + fmtNum(r.giftSomeCount) + ' runs (' + (r.giftSomeCount / r.numRuns * 100).toFixed(1) + '%)');
-    lines.push('     No gifts made:         ' + fmtNum(r.giftNoneCount) + ' runs (' + (r.giftNoneCount / r.numRuns * 100).toFixed(1) + '%)');
+    lines.push('     All gifts made:        ' + fmtNum(gAll) + ' runs (' + (gAll / r.numRuns * 100).toFixed(1) + '%)');
+    lines.push('     Some gifts made:       ' + fmtNum(gSome) + ' runs (' + (gSome / r.numRuns * 100).toFixed(1) + '%)');
+    lines.push('     No gifts made:         ' + fmtNum(gNone) + ' runs (' + (gNone / r.numRuns * 100).toFixed(1) + '%)');
     lines.push('');
     var reportAges = [57, 60, 63, 65, 68, 70, 72, 75, 80, 85, 90].filter(function(age) { return age >= r.startAge && age <= 90; });
     lines.push(' Age  Pensions     ------- Total Income -------      ------ Portfolio Value ------');
     lines.push('                      5th    25th   Median    95th       5th      25th   Median    95th');
     lines.push('-'.repeat(95));
+    function pensionsAtAge(age) {
+      var t = (age >= p.pension1Age ? p.pension1Amount : 0) + (age >= p.pension2Age ? p.pension2Amount : 0);
+      for (var d = 0; d < (p.dbPensions || []).length; d++) {
+        if (age >= p.dbPensions[d].age) t += p.dbPensions[d].amount;
+      }
+      return t;
+    }
     for (var i = 0; i < reportAges.length; i++) {
       var age = reportAges[i];
       var idx = age - r.startAge;
-      var pens = (age >= p.pension1Age ? p.pension1Amount : 0) + (age >= p.pension2Age ? p.pension2Amount : 0);
-      var inc = r.incomeStats[age];
+      if (idx < 0 || idx >= r.median.length) continue;
+      var pens = pensionsAtAge(age);
+      var inc = incStats[age];
       if (!inc) inc = { p5: 0, p25: 0, median: 0, p95: 0 };
       var retiredPct = 0;
       for (var rr = 0; rr < r.numRuns; rr++) if (r.retirementAges[rr] <= age) retiredPct++;
@@ -265,10 +317,12 @@
     lines.push('');
     lines.push('  💰 Probability money lasts to 90:  ' + r.survivalPct.toFixed(1) + '%');
     lines.push('  ⚠️  Runs where money ran out:       ' + fmtNum(r.ruinCount) + ' / ' + fmtNum(r.numRuns) + ' (' + (r.ruinCount / r.numRuns * 100).toFixed(1) + '%)');
-    if (r.ruinCount > 0) {
+    if (r.ruinCount > 0 && r.medianRuinAge != null) {
       lines.push('     Median ruin age (when it happens): ' + Math.round(r.medianRuinAge));
       lines.push('     Earliest ruin age:                 ' + Math.round(r.earliestRuinAge));
-      lines.push('     After pot depleted, income = pensions only (up to ' + fmt(p.pension1Amount + p.pension2Amount) + '/yr)');
+      var totalPens = (p.pension1Amount || 0) + (p.pension2Amount || 0);
+      for (var dp = 0; dp < (p.dbPensions || []).length; dp++) totalPens += (p.dbPensions[dp].amount || 0);
+      lines.push('     After pot depleted, income = pensions only (up to ' + fmt(totalPens) + '/yr)');
     }
     lines.push('');
     lines.push('  🏠 ESTATE AT DEATH (age 90):');
@@ -282,6 +336,14 @@
     return lines.join('\n');
   }
 
+  function safeBuildReport(result, params) {
+    try {
+      return buildReport(result, params);
+    } catch (e) {
+      return 'Full report could not be generated. Run the simulation again.';
+    }
+  }
+
   function runAndUpdate() {
     const loading = document.getElementById('loading');
     const stats = document.getElementById('stats');
@@ -290,10 +352,10 @@
     setTimeout(() => {
       const params = getParamsFromDom();
       const result = window.runSimulation(params);
-      updateStats(result);
+      updateStats(result, params);
       updateChart(result, params);
       var reportEl = document.getElementById('fullReport');
-      if (reportEl) reportEl.textContent = buildReport(result, params);
+      if (reportEl) reportEl.textContent = safeBuildReport(result, params);
       setTimeout(function () {
         if (portfolioChart) portfolioChart.resize();
       }, 150);
@@ -303,56 +365,7 @@
   }
 
   function bindSliders() {
-    const pairs = [
-      ['currentAge', 'currentAgeNum', 25, 60],
-      ['startingPot', 'startingPotNum', 0, 2000000],
-      ['annualContribution', 'annualContributionNum', 0, 80000],
-      ['retirementThreshold', 'retirementThresholdNum', 100000, 2000000],
-      ['earliestRetirement', 'earliestRetirementNum', 55, 62],
-      ['latestRetirement', 'latestRetirementNum', 60, 68],
-      ['incomeFloor', 'incomeFloorNum', 20000, 80000],
-      ['incomeCeiling', 'incomeCeilingNum', 40000, 120000],
-      ['withdrawalRate', 'withdrawalRateNum', 2, 6],
-      ['pension1Age', 'pension1AgeNum', 66, 70],
-      ['pension1Amount', 'pension1AmountNum', 0, 15000],
-      ['pension2Age', 'pension2AgeNum', 66, 75],
-      ['pension2Amount', 'pension2AmountNum', 0, 40000],
-      ['numChildren', 'numChildrenNum', 0, 4],
-      ['uniFeePerYear', 'uniFeePerYearNum', 0, 15000],
-      ['uniYears', 'uniYearsNum', 3, 5],
-      ['giftAmount', 'giftAmountNum', 0, 500000],
-      ['giftMinPot', 'giftMinPotNum', 0, 1500000],
-      ['child1UniAge', 'child1UniAgeNum', 50, 65],
-      ['child1GiftAge', 'child1GiftAgeNum', 65, 80],
-      ['child2UniAge', 'child2UniAgeNum', 50, 65],
-      ['child2GiftAge', 'child2GiftAgeNum', 65, 80],
-      ['child3UniAge', 'child3UniAgeNum', 50, 65],
-      ['child3GiftAge', 'child3GiftAgeNum', 65, 80],
-      ['child4UniAge', 'child4UniAgeNum', 50, 65],
-      ['child4GiftAge', 'child4GiftAgeNum', 65, 80],
-      ['realReturn', 'realReturnNum', 2, 10],
-      ['volatility', 'volatilityNum', 8, 25],
-      ['numRuns', 'numRunsNum', 500, 5000],
-    ];
-    pairs.forEach(([sliderId, numId, minVal, maxVal]) => {
-      const slider = document.getElementById(sliderId);
-      const numInput = document.getElementById(numId);
-      if (!slider || !numInput) return;
-      function fromSlider() {
-        numInput.value = slider.value;
-      }
-      function fromNum() {
-        const v = Number(numInput.value);
-        if (isNaN(v)) return;
-        // Only move the slider to the clamped value; keep the number input as typed
-        // so the simulation uses whatever value the user entered (even outside slider range)
-        const clamped = Math.max(minVal, Math.min(maxVal, v));
-        slider.value = clamped;
-      }
-      slider.addEventListener('input', fromSlider);
-      numInput.addEventListener('input', fromNum);
-      numInput.addEventListener('change', fromNum);
-    });
+    // Sliders removed; number inputs only
   }
 
   function setupRunButton() {
@@ -382,11 +395,77 @@
 
   function setupChildBlocksVisibility() {
     const numEl = document.getElementById('numChildrenNum');
-    const sliderEl = document.getElementById('numChildren');
     if (numEl) numEl.addEventListener('input', updateChildBlocksVisibility);
     if (numEl) numEl.addEventListener('change', updateChildBlocksVisibility);
-    if (sliderEl) sliderEl.addEventListener('input', updateChildBlocksVisibility);
     updateChildBlocksVisibility();
+  }
+
+  function setupHelpPopover() {
+    const popover = document.getElementById('helpPopover');
+    if (!popover) return;
+    function show(e) {
+      const icon = e.target.closest('.help-icon');
+      if (!icon || !icon.dataset.help) return;
+      e.preventDefault();
+      e.stopPropagation();
+      popover.textContent = icon.dataset.help;
+      popover.hidden = false;
+      const rect = icon.getBoundingClientRect();
+      const gap = 6;
+      popover.style.left = rect.left + 'px';
+      popover.style.top = (rect.bottom + gap) + 'px';
+      requestAnimationFrame(function () {
+        const popRect = popover.getBoundingClientRect();
+        let left = parseFloat(popover.style.left);
+        let top = parseFloat(popover.style.top);
+        if (left + popRect.width > window.innerWidth - 8) left = window.innerWidth - popRect.width - 8;
+        if (left < 8) left = 8;
+        if (top + popRect.height > window.innerHeight - 8) top = rect.top - popRect.height - gap;
+        if (top < 8) top = 8;
+        popover.style.left = left + 'px';
+        popover.style.top = top + 'px';
+      });
+    }
+    function hide() {
+      popover.hidden = true;
+    }
+    document.body.addEventListener('click', function (e) {
+      if (e.target.closest('.help-icon')) show(e);
+      else if (!e.target.closest('.help-popover')) hide();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') hide();
+    });
+  }
+
+  function bindDbRow(row) {
+    // No slider sync needed; number inputs only
+  }
+
+  function addDbPensionRow() {
+    const list = document.getElementById('dbPensionsList');
+    if (!list) return;
+    const row = document.createElement('div');
+    row.className = 'db-pension-row';
+    row.innerHTML =
+      '<div class="control-group">' +
+        '<label>Start age</label>' +
+        '<input type="number" class="db-age-num" min="55" max="75" value="65" />' +
+      '</div>' +
+      '<div class="control-group">' +
+        '<label>Amount (£/yr)</label>' +
+        '<input type="number" class="db-amount-num" min="0" max="500000" step="500" value="5000" />' +
+      '</div>' +
+      '<button type="button" class="db-remove-btn">Remove</button>';
+    const removeBtn = row.querySelector('.db-remove-btn');
+    if (removeBtn) removeBtn.addEventListener('click', function () { row.remove(); });
+    list.appendChild(row);
+    bindDbRow(row);
+  }
+
+  function setupDbPensions() {
+    const btn = document.getElementById('addDbPensionBtn');
+    if (btn) btn.addEventListener('click', addDbPensionRow);
   }
 
   function loadInstructions() {
@@ -426,6 +505,8 @@
   setupRunButton();
   setupChartYMax();
   setupChildBlocksVisibility();
+  setupDbPensions();
+  setupHelpPopover();
   loadInstructions();
   // Initial run on load so the page isn't empty
   runAndUpdate();
