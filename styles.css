@@ -296,7 +296,8 @@ header h1 {
   background: #dbeafe;
 }
 
-#runBtn {
+#runBtn,
+#runBtnBottom {
   margin-top: 0;
   margin-bottom: 1rem;
   width: 100%;
@@ -310,8 +311,14 @@ header h1 {
   cursor: pointer;
 }
 
-#runBtn:hover {
+#runBtn:hover,
+#runBtnBottom:hover {
   background: #1d4ed8;
+}
+
+#runBtnBottom {
+  margin-top: 1rem;
+  margin-bottom: 0;
 }
 
 .results {
