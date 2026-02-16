@@ -370,6 +370,8 @@
 
   function setupRunButton() {
     document.getElementById('runBtn').addEventListener('click', runAndUpdate);
+    var bottomBtn = document.getElementById('runBtnBottom');
+    if (bottomBtn) bottomBtn.addEventListener('click', runAndUpdate);
   }
 
   function setupChartYMax() {
