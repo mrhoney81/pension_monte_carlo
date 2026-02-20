@@ -160,7 +160,10 @@ const withDc = defaultParams({
 const rNoDc = runSimulation(baseNoDc);
 const rWithDc = runSimulation(withDc);
 assert(rWithDc.medianEstate >= rNoDc.medianEstate * 0.9, 'With Partner DC, median estate should be at least in same ballpark or higher');
-assert(rWithDc.median[0] === 800000 + 100000, 'Total pot at start = main 800k + DC 100k');
+// DC access age is 57, so at age 45 (index 0) DC pot is not yet included in total
+assert(rWithDc.median[0] === 800000, 'Main pot at start = 800k (DC not accessible until age 57)');
+// Check DC is included after access age (age 57 = index 12)
+assert(rWithDc.median[12] > rNoDc.median[12], 'With DC, total pot at age 57 (access age) > without DC');
 console.log(`   Without Partner DC: median estate £${Math.round(rNoDc.medianEstate).toLocaleString()}`);
 console.log(`   With Partner DC (100k now, 5k/yr until retire, access 57): median estate £${Math.round(rWithDc.medianEstate).toLocaleString()}`);
 console.log('   OK — Partner DC pots are included and change outcomes.\n');
