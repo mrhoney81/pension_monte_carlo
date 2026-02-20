@@ -117,6 +117,11 @@
       <div id="dbPensionsList" class="db-pensions-list"></div>
       <button type="button" id="addDbPensionBtn" class="add-db-btn">Add defined benefit pension</button>
 
+      <h3 class="control-section">Partner DC pensions</h3>
+      <p class="control-hint">Add partner DC pots: current value, your age when each becomes available for withdrawal, and yearly contribution. Tick to contribute until you retire, or set an age when contributions stop.</p>
+      <div id="dcPensionsList" class="dc-pensions-list"></div>
+      <button type="button" id="addDcPensionBtn" class="add-db-btn">Add partner DC pension</button>
+
       <h3 class="control-section">Children (0–4)</h3>
       <div class="control-group">
         <div class="label-row">
@@ -251,6 +256,7 @@
         <p><strong>Median pot at retirement:</strong> £<span id="medianPotRet">—</span> <span class="stat-note">(median of each run’s pot at the end of the year they retired)</span></p>
         <p><strong>Median estate at 90:</strong> £<span id="medianEstate">—</span></p>
         <p id="dbPensionsSummary" class="stat-db-summary" style="display:none"></p>
+        <p id="dcPensionsSummary" class="stat-db-summary" style="display:none"></p>
         <p class="stat-note">Chart at a given age shows median pot across all runs at that age (so includes runs who retired earlier and have already drawn down).</p>
       </div>
       <div class="chart-wrap">

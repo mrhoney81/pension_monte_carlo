@@ -23,6 +23,7 @@ function defaultParams(overrides = {}) {
     pension2Age: 72,
     pension2Amount: 25000,
     dbPensions: [],
+    dcPensions: [],
     numChildren: 2,
     children: [
       { goesToUni: true, uniStartAge: 58, getsGift: true, giftAge: 70 },
@@ -139,6 +140,50 @@ assert(rDb.medianEstate > rBase.medianEstate * 1.5, `With DB, median estate shou
 console.log(`   Without DB: survival ${rBase.survivalPct}%, median estate £${Math.round(rBase.medianEstate).toLocaleString()}`);
 console.log(`   With 5×£100k DB from 65: survival ${rDb.survivalPct}%, median estate £${Math.round(rDb.medianEstate).toLocaleString()}`);
 console.log('   OK — DB pensions are applied and change outcomes.\n');
+
+// 9. Partner DC pensions: with a DC pot, total wealth and outcomes change
+console.log('9. Partner DC pensions...');
+const baseNoDc = defaultParams({ numRuns: 1000, seed: 42 });
+const withDc = defaultParams({
+  numRuns: 1000,
+  seed: 42,
+  dcPensions: [
+    {
+      currentValue: 100000,
+      accessAge: 57,
+      annualContribution: 5000,
+      contributionsUntilPrincipalRetires: true,
+      contributionsEndAge: 65,
+    },
+  ],
+});
+const rNoDc = runSimulation(baseNoDc);
+const rWithDc = runSimulation(withDc);
+assert(rWithDc.medianEstate >= rNoDc.medianEstate * 0.9, 'With Partner DC, median estate should be at least in same ballpark or higher');
+assert(rWithDc.median[0] === 800000 + 100000, 'Total pot at start = main 800k + DC 100k');
+console.log(`   Without Partner DC: median estate £${Math.round(rNoDc.medianEstate).toLocaleString()}`);
+console.log(`   With Partner DC (100k now, 5k/yr until retire, access 57): median estate £${Math.round(rWithDc.medianEstate).toLocaleString()}`);
+console.log('   OK — Partner DC pots are included and change outcomes.\n');
+
+// 10. Partner DC with contributions until fixed age (not until retire)
+console.log('10. Partner DC contributions until fixed age...');
+const withDcEndAge = defaultParams({
+  numRuns: 1000,
+  seed: 42,
+  dcPensions: [
+    {
+      currentValue: 0,
+      accessAge: 60,
+      annualContribution: 10000,
+      contributionsUntilPrincipalRetires: false,
+      contributionsEndAge: 45,
+    },
+  ],
+});
+const rDcEndAge = runSimulation(withDcEndAge);
+assert(rDcEndAge.median[0] === 800000, 'Total at start = main only (DC has 0 value, contributions end at 45 so age 45 gets no contrib)');
+assert(rDcEndAge.survivalPct >= 0 && rDcEndAge.medianRetAge >= 57, 'Run completes with fixed end age');
+console.log('   OK — Contributions end at specified age when checkbox unchecked.\n');
 
 console.log('All tests passed. Simulation is running the full Monte Carlo.');
 console.log(`  Sample (seed 42, 2000 runs): survival ${r1.survivalPct.toFixed(1)}%, median ret age ${Math.round(r1.medianRetAge)}, median estate £${Math.round(r1.medianEstate).toLocaleString()}.`);

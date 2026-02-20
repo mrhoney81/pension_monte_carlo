@@ -59,6 +59,7 @@ function runSimulation(params) {
     pension2Age,
     pension2Amount,
     dbPensions,
+    dcPensions = [],
     numChildren,
     children,
     uniFeePerYear,
@@ -87,6 +88,14 @@ function runSimulation(params) {
     .fill(null)
     .map(() => new Uint8Array(4));
 
+  const numDc = dcPensions.length;
+  const dcPaths = Array(numRuns)
+    .fill(null)
+    .map(() => dcPensions.map(() => new Float64Array(nAges)));
+  for (let run = 0; run < numRuns; run++) {
+    for (let d = 0; d < numDc; d++) dcPaths[run][d][0] = dcPensions[d].currentValue || 0;
+  }
+
   for (let run = 0; run < numRuns; run++) {
     const rng = makeRng(seed + run * 1000);
     let retired = false;
@@ -96,14 +105,29 @@ function runSimulation(params) {
       const age = ages[i];
       const logR = normal(logMu, logSigma, rng);
       const growthFactor = Math.exp(logR);
-      const prev = Math.max(allPaths[run][i - 1], 0);
-      let newVal = prev * growthFactor;
+
+      let mainVal = Math.max(allPaths[run][i - 1], 0) * growthFactor;
+      const dcVals = [];
+      for (let d = 0; d < numDc; d++) {
+        let v = Math.max(dcPaths[run][d][i - 1], 0) * growthFactor;
+        const dc = dcPensions[d];
+        const contribActive = dc.contributionsUntilPrincipalRetires
+          ? !retired
+          : age < (dc.contributionsEndAge ?? 65);
+        if (contribActive) v += dc.annualContribution || 0;
+        dcVals.push(v);
+      }
+
+      let totalPot = mainVal;
+      for (let d = 0; d < numDc; d++) {
+        if (age >= dcPensions[d].accessAge) totalPot += dcVals[d];
+      }
 
       if (!retired) {
         if (age >= earliestRetirement) {
           const pensionsNow = getPensions(age, params);
           const canRetireOnPensions = pensionsNow >= incomeFloor;
-          if (newVal >= retirementThreshold || age >= latestRetirement || canRetireOnPensions) {
+          if (totalPot >= retirementThreshold || age >= latestRetirement || canRetireOnPensions) {
             retired = true;
             retirementAges[run] = age;
           }
@@ -111,40 +135,64 @@ function runSimulation(params) {
       }
 
       if (!retired) {
-        newVal += annualContribution;
+        mainVal += annualContribution;
       } else {
         const pensions = getPensions(age, params);
-        let targetIncome = newVal * withdrawalRate;
+        let targetIncome = totalPot * withdrawalRate;
         targetIncome = Math.max(targetIncome, incomeFloor);
         targetIncome = Math.min(targetIncome, incomeCeiling);
-        let wdFromPot = Math.max(targetIncome - pensions, 0);
-        wdFromPot = Math.min(wdFromPot, newVal);
-        newVal -= wdFromPot;
-        const totalIncomeReceived = wdFromPot + pensions;
+        let wdFromPots = Math.max(targetIncome - pensions, 0);
+        wdFromPots = Math.min(wdFromPots, totalPot);
+
+        if (totalPot > 0) {
+          mainVal -= wdFromPots * (mainVal / totalPot);
+          for (let d = 0; d < numDc; d++) {
+            if (age >= dcPensions[d].accessAge) {
+              const dcShare = wdFromPots * (dcVals[d] / totalPot);
+              dcVals[d] -= dcShare;
+            }
+          }
+        }
+
+        const totalIncomeReceived = wdFromPots + pensions;
         const surplus = Math.max(0, totalIncomeReceived - targetIncome);
-        newVal += surplus;
+        mainVal += surplus;
         allTotalIncome[run][i] = Math.min(totalIncomeReceived, targetIncome);
 
         for (let c = 0; c < numChildren && c < 4; c++) {
           const child = children[c];
-          if (child && child.getsGift && age === child.giftAge && !giftMade[run][c] && newVal >= giftMinPot) {
-            newVal -= giftAmount;
+          if (child && child.getsGift && age === child.giftAge && !giftMade[run][c] && mainVal >= giftMinPot) {
+            mainVal -= giftAmount;
             giftMade[run][c] = 1;
           }
         }
 
-        if (newVal <= 0 && Number.isNaN(ruinAges[run])) ruinAges[run] = age;
+        let totalPotAfter = mainVal;
+        for (let d = 0; d < numDc; d++) {
+          if (age >= dcPensions[d].accessAge) totalPotAfter += dcVals[d];
+        }
+        if (totalPotAfter <= 0 && Number.isNaN(ruinAges[run])) ruinAges[run] = age;
       }
 
       for (let c = 0; c < numChildren && c < 4; c++) {
         const child = children[c];
         if (child && child.goesToUni && age >= child.uniStartAge && age < child.uniStartAge + uniYears) {
-          newVal -= uniFeePerYear;
+          mainVal -= uniFeePerYear;
         }
       }
 
-      allPaths[run][i] = Math.max(newVal, 0);
+      allPaths[run][i] = Math.max(mainVal, 0);
+      for (let d = 0; d < numDc; d++) dcPaths[run][d][i] = Math.max(dcVals[d], 0);
     }
+  }
+
+  function totalPotAtRunAge(runIdx, ageIdx) {
+    const age = ages[ageIdx];
+    let t = allPaths[runIdx][ageIdx];
+    for (let d = 0; d < numDc; d++) {
+      if (age >= dcPensions[d].accessAge) t += dcPaths[runIdx][d][ageIdx];
+    }
+    return t;
   }
 
   const p5 = new Float64Array(nAges);
@@ -155,7 +203,7 @@ function runSimulation(params) {
   const p95 = new Float64Array(nAges);
   const row = [];
   for (let i = 0; i < nAges; i++) {
-    for (let run = 0; run < numRuns; run++) row[run] = allPaths[run][i];
+    for (let run = 0; run < numRuns; run++) row[run] = totalPotAtRunAge(run, i);
     row.sort((a, b) => a - b);
     p5[i] = percentile(row, 5);
     p10[i] = percentile(row, 10);
@@ -173,7 +221,7 @@ function runSimulation(params) {
   const potsAtRetirement = [];
   for (let r = 0; r < numRuns; r++) {
     const idx = retirementAges[r] - startAge;
-    potsAtRetirement.push(allPaths[r][idx]);
+    potsAtRetirement.push(totalPotAtRunAge(r, idx));
   }
   potsAtRetirement.sort((a, b) => a - b);
   const medianPotAtRet = percentile(potsAtRetirement, 50);
@@ -217,7 +265,7 @@ function runSimulation(params) {
 
   const estate = [];
   const finalIdx = SIM_END_AGE - startAge;
-  for (let r = 0; r < numRuns; r++) estate.push(allPaths[r][finalIdx]);
+  for (let r = 0; r < numRuns; r++) estate.push(totalPotAtRunAge(r, finalIdx));
   estate.sort((a, b) => a - b);
   const medianEstate = percentile(estate, 50);
   const estateP5 = percentile(estate, 5);

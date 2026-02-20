@@ -41,6 +41,30 @@
         }
         return arr;
       })(),
+      dcPensions: (function () {
+        const rows = document.querySelectorAll('.dc-pension-row');
+        const arr = [];
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i];
+          const currentValEl = r.querySelector('.dc-current-value');
+          const accessAgeEl = r.querySelector('.dc-access-age');
+          const contribEl = r.querySelector('.dc-annual-contribution');
+          const untilRetireCb = r.querySelector('.dc-until-retire');
+          const endAgeEl = r.querySelector('.dc-contributions-end-age');
+          if (currentValEl && accessAgeEl && contribEl && untilRetireCb) {
+            const contributionsUntilPrincipalRetires = untilRetireCb.checked;
+            const contributionsEndAge = endAgeEl ? (Number(endAgeEl.value) || 65) : 65;
+            arr.push({
+              currentValue: Number(currentValEl.value) || 0,
+              accessAge: Number(accessAgeEl.value) || 57,
+              annualContribution: Number(contribEl.value) || 0,
+              contributionsUntilPrincipalRetires,
+              contributionsEndAge,
+            });
+          }
+        }
+        return arr;
+      })(),
       numChildren: Math.min(4, Math.max(0, getNum('numChildrenNum') || 0)),
       children: (function () {
         const n = Math.min(4, Math.max(0, getNum('numChildrenNum') || 0));
@@ -207,6 +231,16 @@
         dbSumEl.style.display = 'none';
       }
     }
+    var dcSumEl = document.getElementById('dcPensionsSummary');
+    if (dcSumEl) {
+      var dc = (params && params.dcPensions) ? params.dcPensions : [];
+      if (dc.length > 0) {
+        dcSumEl.textContent = 'Partner DC pensions in this run: ' + dc.length + ' pot(s)';
+        dcSumEl.style.display = '';
+      } else {
+        dcSumEl.style.display = 'none';
+      }
+    }
   }
 
   function fmt(x) {
@@ -243,6 +277,11 @@
     var db = p.dbPensions || [];
     for (var d = 0; d < db.length; d++) {
       lines.push('  DB pension ' + (d + 1) + ':            ' + fmt(db[d].amount) + '/yr from age ' + db[d].age);
+    }
+    var dc = p.dcPensions || [];
+    for (var d = 0; d < dc.length; d++) {
+      var contribNote = dc[d].contributionsUntilPrincipalRetires ? 'until you retire' : 'until age ' + dc[d].contributionsEndAge;
+      lines.push('  Partner DC ' + (d + 1) + ':          ' + fmt(dc[d].currentValue) + ' now, access age ' + dc[d].accessAge + ', ' + fmt(dc[d].annualContribution) + '/yr ' + contribNote);
     }
     var uniParts = [];
     for (var c = 0; c < p.numChildren && c < p.children.length; c++) {
@@ -470,6 +509,52 @@
     if (btn) btn.addEventListener('click', addDbPensionRow);
   }
 
+  function toggleDcContributionsEndAge(row) {
+    const cb = row.querySelector('.dc-until-retire');
+    const endAgeWrap = row.querySelector('.dc-contributions-end-age-wrap');
+    if (!cb || !endAgeWrap) return;
+    endAgeWrap.hidden = cb.checked;
+  }
+
+  function addDcPensionRow() {
+    const list = document.getElementById('dcPensionsList');
+    if (!list) return;
+    const row = document.createElement('div');
+    row.className = 'dc-pension-row';
+    row.innerHTML =
+      '<div class="control-group">' +
+        '<label>Current value (£)</label>' +
+        '<input type="number" class="dc-current-value" min="0" max="10000000" step="1000" value="0" />' +
+      '</div>' +
+      '<div class="control-group">' +
+        '<label>Access age (your age)</label>' +
+        '<input type="number" class="dc-access-age" min="55" max="75" value="57" />' +
+      '</div>' +
+      '<div class="control-group">' +
+        '<label>Annual contribution (£)</label>' +
+        '<input type="number" class="dc-annual-contribution" min="0" max="500000" step="500" value="0" />' +
+      '</div>' +
+      '<div class="control-group dc-check-wrap">' +
+        '<label class="checkbox-label"><input type="checkbox" class="dc-until-retire" checked /> Contributions until I retire</label>' +
+      '</div>' +
+      '<div class="control-group dc-contributions-end-age-wrap" hidden>' +
+        '<label>Contributions end at my age</label>' +
+        '<input type="number" class="dc-contributions-end-age" min="50" max="75" value="65" />' +
+      '</div>' +
+      '<button type="button" class="db-remove-btn dc-remove-btn">Remove</button>';
+    const removeBtn = row.querySelector('.dc-remove-btn');
+    if (removeBtn) removeBtn.addEventListener('click', function () { row.remove(); });
+    const untilRetireCb = row.querySelector('.dc-until-retire');
+    if (untilRetireCb) untilRetireCb.addEventListener('change', function () { toggleDcContributionsEndAge(row); });
+    list.appendChild(row);
+    toggleDcContributionsEndAge(row);
+  }
+
+  function setupDcPensions() {
+    const btn = document.getElementById('addDcPensionBtn');
+    if (btn) btn.addEventListener('click', addDcPensionRow);
+  }
+
   function loadInstructions() {
     const el = document.getElementById('instructions');
     if (!el) return;
@@ -508,6 +593,7 @@
   setupChartYMax();
   setupChildBlocksVisibility();
   setupDbPensions();
+  setupDcPensions();
   setupHelpPopover();
   loadInstructions();
   // Initial run on load so the page isn't empty
