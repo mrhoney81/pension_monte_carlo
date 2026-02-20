@@ -28,6 +28,39 @@ function percentile(sorted, p) {
   return sorted[lo] + (index - lo) * (sorted[hi] - sorted[lo]);
 }
 
+function computeEquilibriumDistribution(transitionMatrix) {
+  const p00 = transitionMatrix[0][0];
+  const p11 = transitionMatrix[1][1];
+  const pi0 = (1 - p11) / ((1 - p00) + (1 - p11));
+  return [pi0, 1 - pi0];
+}
+
+function makeRegimeReturnGenerator(params, rng) {
+  const regimes = params.regimes;
+  const transitionMatrix = params.transitionMatrix;
+  const logParams = regimes.map(function (r) {
+    var logMu = Math.log(1 + r.mean) - 0.5 * r.vol * r.vol;
+    return { logMu: logMu, logSigma: r.vol };
+  });
+
+  var currentRegime;
+  if (params.initialRegime === 0 || params.initialRegime === 1) {
+    currentRegime = params.initialRegime;
+  } else {
+    var eq = computeEquilibriumDistribution(transitionMatrix);
+    currentRegime = rng() < eq[0] ? 0 : 1;
+  }
+
+  return function () {
+    var lp = logParams[currentRegime];
+    var logR = normal(lp.logMu, lp.logSigma, rng);
+    var growthFactor = Math.exp(logR);
+    var stay = transitionMatrix[currentRegime][currentRegime];
+    currentRegime = rng() < stay ? currentRegime : (1 - currentRegime);
+    return growthFactor;
+  };
+}
+
 function getPensions(age, params) {
   let p = 0;
   if (age >= params.pension1Age) p += params.pension1Amount;
@@ -68,9 +101,12 @@ function runSimulation(params) {
     giftMinPot,
   } = params;
 
+  const returnModel = params.returnModel || 'standard';
+  const useRegime = returnModel === 'regime';
+
   const startAge = Math.min(SIM_END_AGE, Math.max(25, currentAge || 45));
-  const logMu = Math.log(1 + realArithmeticMean) - 0.5 * volatility * volatility;
-  const logSigma = volatility;
+  const logMu = useRegime ? 0 : Math.log(1 + realArithmeticMean) - 0.5 * volatility * volatility;
+  const logSigma = useRegime ? 0 : volatility;
   const nAges = SIM_END_AGE - startAge + 1;
   const ages = [];
   for (let a = startAge; a <= SIM_END_AGE; a++) ages.push(a);
@@ -98,13 +134,15 @@ function runSimulation(params) {
 
   for (let run = 0; run < numRuns; run++) {
     const rng = makeRng(seed + run * 1000);
+    const nextReturn = useRegime ? makeRegimeReturnGenerator(params, rng) : null;
     let retired = false;
     for (let i = 0; i < nAges; i++) allPaths[run][i] = i === 0 ? startingPot : 0;
 
     for (let i = 1; i < nAges; i++) {
       const age = ages[i];
-      const logR = normal(logMu, logSigma, rng);
-      const growthFactor = Math.exp(logR);
+      const growthFactor = useRegime
+        ? nextReturn()
+        : Math.exp(normal(logMu, logSigma, rng));
 
       let mainVal = Math.max(allPaths[run][i - 1], 0) * growthFactor;
       const dcVals = [];
@@ -329,7 +367,8 @@ function runSimulation(params) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { runSimulation };
+  module.exports = { runSimulation, computeEquilibriumDistribution, makeRegimeReturnGenerator };
 } else {
   window.runSimulation = runSimulation;
+  window.computeEquilibriumDistribution = computeEquilibriumDistribution;
 }

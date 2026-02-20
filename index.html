@@ -213,19 +213,84 @@
       </div>
 
       <h3 class="control-section">Simulation</h3>
-      <div class="control-group">
+      <div class="control-group model-checkboxes">
         <div class="label-row">
-          <label for="realReturnNum">Expected real return (%)</label>
-          <span class="help-icon" data-help="Assumed long-term real (inflation-adjusted) return, arithmetic mean. Typical range 5–7.5%. Default is 6% to result in a realistic 5% compound annual growth rate." aria-label="Help">ⓘ</span>
+          <label>Models to run</label>
+          <span class="help-icon" data-help="Standard: single distribution each year (i.i.d.). Regime-switching: Markov chain with bull/bear states — returns cluster in regimes, producing more realistic fat tails. Tick both to compare side-by-side." aria-label="Help">ⓘ</span>
         </div>
-        <input type="number" id="realReturnNum" min="0" max="15" step="0.5" value="6" />
+        <label class="checkbox-label"><input type="checkbox" id="runStandard" checked /> Standard MC</label>
+        <label class="checkbox-label"><input type="checkbox" id="runRegime" /> Regime-switching (Markov)</label>
       </div>
-      <div class="control-group">
-        <div class="label-row">
-          <label for="volatilityNum">Volatility (%)</label>
-          <span class="help-icon" data-help="Annual volatility of returns. Higher = more uncertainty. Typical 10–20%." aria-label="Help">ⓘ</span>
+      <div id="standardReturnParams">
+        <div class="control-group">
+          <div class="label-row">
+            <label for="realReturnNum">Expected real return (%)</label>
+            <span class="help-icon" data-help="Assumed long-term real (inflation-adjusted) return, arithmetic mean. Typical range 5–7.5%. Default is 6% to result in a realistic 5% compound annual growth rate." aria-label="Help">ⓘ</span>
+          </div>
+          <input type="number" id="realReturnNum" min="0" max="15" step="0.5" value="6" />
         </div>
-        <input type="number" id="volatilityNum" min="5" max="40" step="1" value="16" />
+        <div class="control-group">
+          <div class="label-row">
+            <label for="volatilityNum">Volatility (%)</label>
+            <span class="help-icon" data-help="Annual volatility of returns. Higher = more uncertainty. Typical 10–20%." aria-label="Help">ⓘ</span>
+          </div>
+          <input type="number" id="volatilityNum" min="5" max="40" step="1" value="16" />
+        </div>
+      </div>
+      <div id="regimePanel" hidden>
+        <div class="control-group">
+          <div class="label-row">
+            <label for="regimePreset">Preset</label>
+            <span class="help-icon" data-help="Hardy 2-regime: calibrated to S&amp;P 500 (Hardy 2001). Conservative: lower means and vol." aria-label="Help">ⓘ</span>
+          </div>
+          <select id="regimePreset">
+            <option value="hardy">Hardy 2-regime (S&amp;P 500)</option>
+            <option value="conservative">Conservative 2-regime</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div class="regime-block">
+          <h4 class="regime-heading">Bull regime</h4>
+          <div class="control-group">
+            <label for="bullMean">Mean return (%)</label>
+            <input type="number" id="bullMean" min="-20" max="30" step="0.1" value="9.5" class="regime-input" />
+          </div>
+          <div class="control-group">
+            <label for="bullVol">Volatility (%)</label>
+            <input type="number" id="bullVol" min="1" max="50" step="0.1" value="12" class="regime-input" />
+          </div>
+          <div class="control-group">
+            <label for="bullStay">Stay probability (%)</label>
+            <input type="number" id="bullStay" min="50" max="99.9" step="0.1" value="96" class="regime-input" />
+          </div>
+        </div>
+        <div class="regime-block">
+          <h4 class="regime-heading">Bear regime</h4>
+          <div class="control-group">
+            <label for="bearMean">Mean return (%)</label>
+            <input type="number" id="bearMean" min="-50" max="20" step="0.1" value="-5" class="regime-input" />
+          </div>
+          <div class="control-group">
+            <label for="bearVol">Volatility (%)</label>
+            <input type="number" id="bearVol" min="1" max="60" step="0.1" value="25" class="regime-input" />
+          </div>
+          <div class="control-group">
+            <label for="bearStay">Stay probability (%)</label>
+            <input type="number" id="bearStay" min="50" max="99.9" step="0.1" value="87" class="regime-input" />
+          </div>
+        </div>
+        <div class="control-group">
+          <div class="label-row">
+            <label for="initialRegime">Initial regime</label>
+            <span class="help-icon" data-help="Equilibrium: randomly picked based on long-run regime probabilities. Or force start in a specific regime." aria-label="Help">ⓘ</span>
+          </div>
+          <select id="initialRegime">
+            <option value="equilibrium">Equilibrium distribution</option>
+            <option value="bull">Start in Bull</option>
+            <option value="bear">Start in Bear</option>
+          </select>
+        </div>
+        <p id="equilibriumInfo" class="equilibrium-info"></p>
       </div>
       <div class="control-group">
         <div class="label-row">
@@ -250,14 +315,29 @@
     <section class="results">
       <div id="loading" class="loading" hidden>Running simulation…</div>
       <div id="stats" class="stats">
-        <p><strong>Money lasts to 90:</strong> <span id="survivalPct">—</span>%</p>
-        <p><strong>Ruin:</strong> <span id="ruinCount">—</span> runs</p>
-        <p><strong>Median retirement age:</strong> <span id="medianRetAge">—</span></p>
-        <p><strong>Median pot at retirement:</strong> £<span id="medianPotRet">—</span> <span class="stat-note">(median of each run’s pot at the end of the year they retired)</span></p>
-        <p><strong>Median estate at 90:</strong> £<span id="medianEstate">—</span></p>
+        <div id="statsStandard">
+          <p class="stat-model-label" id="stdLabel" hidden><strong>Standard MC</strong></p>
+          <p><strong>Money lasts to 90:</strong> <span id="survivalPct">—</span>%</p>
+          <p><strong>Ruin:</strong> <span id="ruinCount">—</span> runs</p>
+          <p><strong>Median retirement age:</strong> <span id="medianRetAge">—</span></p>
+          <p><strong>Median pot at retirement:</strong> £<span id="medianPotRet">—</span></p>
+          <p><strong>Median estate at 90:</strong> £<span id="medianEstate">—</span></p>
+        </div>
+        <div id="statsRegime" hidden>
+          <p class="stat-model-label"><strong>Regime-switching</strong></p>
+          <p><strong>Money lasts to 90:</strong> <span id="regSurvivalPct">—</span>%</p>
+          <p><strong>Ruin:</strong> <span id="regRuinCount">—</span> runs</p>
+          <p><strong>Median retirement age:</strong> <span id="regMedianRetAge">—</span></p>
+          <p><strong>Median pot at retirement:</strong> £<span id="regMedianPotRet">—</span></p>
+          <p><strong>Median estate at 90:</strong> £<span id="regMedianEstate">—</span></p>
+        </div>
         <p id="dbPensionsSummary" class="stat-db-summary" style="display:none"></p>
         <p id="dcPensionsSummary" class="stat-db-summary" style="display:none"></p>
         <p class="stat-note">Chart at a given age shows median pot across all runs at that age (so includes runs who retired earlier and have already drawn down).</p>
+      </div>
+      <div id="chartToggles" class="chart-toggles" hidden>
+        <label class="toggle-label"><input type="checkbox" id="showStandardMC" checked /> Show Standard MC</label>
+        <label class="toggle-label"><input type="checkbox" id="showRegimeMC" checked /> Show Regime-switching</label>
       </div>
       <div class="chart-wrap">
         <canvas id="portfolioChart" aria-label="Portfolio value by age"></canvas>

@@ -1,6 +1,6 @@
 'use strict';
 
-const { runSimulation } = require('./simulation.js');
+const { runSimulation, computeEquilibriumDistribution } = require('./simulation.js');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 let passed = 0, failed = 0;
@@ -212,6 +212,118 @@ console.log('\nTest 12: Time for 3000 runs is >5× time for 30 runs');
   console.log(`  3000 runs: ${t3000}ms`);
   const ratio = t3000 / Math.max(t30, 1);
   assert(ratio > 5, `Time ratio 3000/30 runs > 5 (got ${ratio.toFixed(1)}×)`);
+}
+
+// ─── Test 13: Regime — Reproducibility ─────────────────────────────────────────
+console.log('\nTest 13: Regime-switching — same seed produces identical results');
+{
+  const regimeParams = {
+    ...BASE,
+    returnModel: 'regime',
+    regimes: [{ mean: 0.095, vol: 0.12 }, { mean: -0.05, vol: 0.25 }],
+    transitionMatrix: [[0.96, 0.04], [0.13, 0.87]],
+    initialRegime: -1,
+    seed: 42, numRuns: 500,
+  };
+  const r1 = runSimulation(regimeParams);
+  const r2 = runSimulation(regimeParams);
+  assert(r1.survivalPct === r2.survivalPct, `survivalPct matches: ${r1.survivalPct} === ${r2.survivalPct}`);
+  assert(r1.medianEstate === r2.medianEstate, 'medianEstate matches');
+  let pathsMatch = true;
+  for (let i = 0; i < r1.median.length; i++) {
+    if (r1.median[i] !== r2.median[i]) { pathsMatch = false; break; }
+  }
+  assert(pathsMatch, 'All median path values identical');
+}
+
+// ─── Test 14: Regime — Degenerate (identical regimes) ≈ standard MC ──────────
+console.log('\nTest 14: Regime with identical regimes ≈ standard MC');
+{
+  const mean = 0.06, vol = 0.16;
+  const stdR = runSimulation(p({ numRuns: 5000, seed: 42 }));
+  const regR = runSimulation(p({
+    numRuns: 5000, seed: 42,
+    returnModel: 'regime',
+    regimes: [{ mean, vol }, { mean, vol }],
+    transitionMatrix: [[0.90, 0.10], [0.10, 0.90]],
+    initialRegime: -1,
+  }));
+  // Medians should be within 15% since regime draws extra rng values
+  const medFinalStd = stdR.median[stdR.median.length - 1];
+  const medFinalReg = regR.median[regR.median.length - 1];
+  const diff = Math.abs(medFinalStd - medFinalReg) / medFinalStd * 100;
+  assert(diff < 15, `Final median within 15% (std=${medFinalStd.toFixed(0)}, reg=${medFinalReg.toFixed(0)}, diff=${diff.toFixed(1)}%)`);
+  const survDiff = Math.abs(stdR.survivalPct - regR.survivalPct);
+  assert(survDiff < 10, `Survival % within 10pp (std=${stdR.survivalPct.toFixed(1)}, reg=${regR.survivalPct.toFixed(1)}, diff=${survDiff.toFixed(1)})`);
+}
+
+// ─── Test 15: Regime — 100% stay in bull → all bull returns ──────────────────
+console.log('\nTest 15: 100% stay in bull with near-zero vol → converges to bull mean');
+{
+  const bullMean = 0.08;
+  const r = runSimulation(p({
+    numRuns: 200, seed: 55,
+    returnModel: 'regime',
+    regimes: [{ mean: bullMean, vol: 0.0001 }, { mean: -0.10, vol: 0.0001 }],
+    transitionMatrix: [[1.0, 0.0], [0.0, 1.0]],
+    initialRegime: 0,
+    annualContribution: 0,
+    retirementThreshold: 999_000_000_000,
+    earliestRetirement: 90, latestRetirement: 90,
+    incomeFloor: 0, pension1Amount: 0, pension2Amount: 0,
+  }));
+  const years = 10;
+  const expected = BASE.startingPot * Math.pow(1 + bullMean, years);
+  const med = r.median[years];
+  const err = Math.abs(med - expected) / expected * 100;
+  assert(err < 2, `Median at age ${BASE.currentAge + years} ≈ ${expected.toFixed(0)} (within 2%, err=${err.toFixed(3)}%)`);
+  const spread = r.p95[years] - r.p5[years];
+  assert(spread / med < 0.01, `Spread < 1% of median (spread=${spread.toFixed(0)})`);
+}
+
+// ─── Test 16: Regime — Bear-only start → lower outcomes ──────────────────────
+console.log('\nTest 16: Bear-only (initialRegime=1 with high bear stay) → lower outcomes');
+{
+  const bullR = runSimulation(p({
+    numRuns: 2000, seed: 42,
+    returnModel: 'regime',
+    regimes: [{ mean: 0.095, vol: 0.12 }, { mean: -0.05, vol: 0.25 }],
+    transitionMatrix: [[0.96, 0.04], [0.13, 0.87]],
+    initialRegime: 0,
+  }));
+  const bearR = runSimulation(p({
+    numRuns: 2000, seed: 42,
+    returnModel: 'regime',
+    regimes: [{ mean: 0.095, vol: 0.12 }, { mean: -0.05, vol: 0.25 }],
+    transitionMatrix: [[0.96, 0.04], [0.13, 0.87]],
+    initialRegime: 1,
+  }));
+  const bullFinal = bullR.medianEstate;
+  const bearFinal = bearR.medianEstate;
+  assert(bearFinal < bullFinal, `Bear start median estate (${bearFinal.toFixed(0)}) < bull start (${bullFinal.toFixed(0)})`);
+}
+
+// ─── Test 17: Equilibrium computation ─────────────────────────────────────────
+console.log('\nTest 17: computeEquilibriumDistribution returns correct values');
+{
+  // Hardy defaults: bullStay=0.96, bearStay=0.87
+  const eq = computeEquilibriumDistribution([[0.96, 0.04], [0.13, 0.87]]);
+  const expectedBull = 0.13 / (0.04 + 0.13); // ~76.5%
+  const errBull = Math.abs(eq[0] - expectedBull) / expectedBull * 100;
+  assert(errBull < 0.1, `Bull equilibrium ≈ ${(expectedBull * 100).toFixed(1)}% (got ${(eq[0] * 100).toFixed(1)}%)`);
+  assert(Math.abs(eq[0] + eq[1] - 1) < 1e-10, 'Equilibrium sums to 1');
+
+  // Symmetric case
+  const eq2 = computeEquilibriumDistribution([[0.90, 0.10], [0.10, 0.90]]);
+  assert(Math.abs(eq2[0] - 0.5) < 1e-10, `Symmetric: pi_bull = 0.5 (got ${eq2[0]})`);
+}
+
+// ─── Test 18: Backward compatibility — no returnModel field ──────────────────
+console.log('\nTest 18: Backward compat — params without returnModel still work');
+{
+  const r = runSimulation(BASE);
+  assert(r.survivalPct >= 0 && r.survivalPct <= 100, `survivalPct in [0,100] (got ${r.survivalPct})`);
+  assert(r.median.length > 0, 'median array is non-empty');
 }
 
 // ─── Summary ──────────────────────────────────────────────────────────────────
